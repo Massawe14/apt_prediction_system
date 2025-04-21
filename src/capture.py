@@ -28,14 +28,14 @@ FLOW_FEATURES = [
 ]
 
 class NetworkCapture:
-    def __init__(self, interface='Wi-Fi', capture_duration=15):
+    def __init__(self, interface='eth0', capture_duration=15):
         self.interface = interface
         self.capture_duration = capture_duration
         self.flows = defaultdict(lambda: {
             'packets': [], 'start_time': None, 'end_time': None,
             'fwd_packets': 0, 'bwd_packets': 0, 'fwd_bytes': 0, 'bwd_bytes': 0
         })
-        self.tshark_path = r"C:\Program Files\Wireshark\tshark.exe"
+        self.tshark_path = r"/usr/bin/tshark"
 
     async def capture_traffic(self):
         print(f"Starting capture on interface: {self.interface}")
