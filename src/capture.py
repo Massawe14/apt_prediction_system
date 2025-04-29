@@ -4,9 +4,10 @@ import asyncio
 from datetime import datetime
 from collections import defaultdict
 import numpy as np
+from scapy.all import get_working_ifaces, sniff
 
 FLOW_FEATURES = [
-    'Flow ID', 'Src IP', 'Src Port', 'Dst IP', 'Dst Port', 'Protocol', 'Timestamp',
+    'Source Type', 'Flow ID', 'Src IP', 'Src Port', 'Dst IP', 'Dst Port', 'Protocol', 'Timestamp',
     'Flow Duration', 'Total Fwd Packet', 'Total Bwd packets', 'Total Length of Fwd Packet',
     'Total Length of Bwd Packet', 'Fwd Packet Length Max', 'Fwd Packet Length Min',
     'Fwd Packet Length Mean', 'Fwd Packet Length Std', 'Bwd Packet Length Max',
@@ -28,17 +29,42 @@ FLOW_FEATURES = [
 ]
 
 class NetworkCapture:
-    def __init__(self, interface='eth0', capture_duration=15):
-        self.interface = interface
+    def __init__(self, capture_duration=15, source_type='PCAP'):
         self.capture_duration = capture_duration
+        self.source_type = source_type
         self.flows = defaultdict(lambda: {
             'packets': [], 'start_time': None, 'end_time': None,
             'fwd_packets': 0, 'bwd_packets': 0, 'fwd_bytes': 0, 'bwd_bytes': 0
         })
         self.tshark_path = r"/usr/bin/tshark"
+        self.interface = self._select_active_interface()
+
+    def _select_active_interface(self):
+        """Select the first network interface with data."""
+        interfaces = get_working_ifaces()
+        if not interfaces:
+            raise ValueError("No working network interfaces found.")
+
+        print("Checking interfaces for data...")
+        for iface in interfaces:
+            print(f"Testing interface: {iface.name}")
+            try:
+                # Perform a brief capture to check for data
+                packets = sniff(iface=iface.name, count=5, timeout=3)
+                if packets:
+                    print(f"Data found on interface: {iface.name}")
+                    return iface.name
+            except Exception as e:
+                print(f"Error testing interface {iface.name}: {e}")
+                continue
+
+        raise ValueError("No interfaces with data found.")
 
     async def capture_traffic(self):
-        print(f"Starting capture on interface: {self.interface}")
+        if not self.interface:
+            raise ValueError("No valid interface selected for capture.")
+        
+        print(f"Starting capture on interface: {self.interface} with source type: {self.source_type}")
 
         def capture_sync():
             asyncio.set_event_loop(asyncio.new_event_loop())  # Create and set an event loop for the thread
@@ -110,6 +136,7 @@ class NetworkCapture:
             bwd_lens = [p['length'] for p in flow['packets'] if not p['is_fwd']]
 
             flow_data = {
+                'Source Type': self.source_type,
                 'Flow ID': flow_id,
                 'Src IP': flow_id.split('-')[0],
                 'Src Port': int(flow_id.split('-')[2]),
@@ -198,7 +225,7 @@ class NetworkCapture:
         return flows_data
 
 def test_capture_sync():
-    capturer = NetworkCapture(interface='Wi-Fi')
+    capturer = NetworkCapture(capture_duration=15, source_type='PCAP')
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     df = loop.run_until_complete(capturer.capture_traffic())
@@ -207,3 +234,4 @@ def test_capture_sync():
 
 if __name__ == "__main__":
     test_capture_sync()
+    
