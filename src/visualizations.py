@@ -3,6 +3,7 @@ import base64
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import networkx as nx
 from sklearn.metrics import confusion_matrix, classification_report
 
 def plot_to_base64():
@@ -15,6 +16,16 @@ def plot_to_base64():
 
 def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, y_pred_stage, X, trend_data, geo_data, is_training=False):
     visualizations = {}
+    
+    # Ensure Timestamp is in datetime format
+    if 'Timestamp' in df.columns:
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+    
+    # Generate Session Correlation IDs
+    df['Session Correlation ID'] = df.apply(
+        lambda row: f"{row['Src IP']}-{row['Dst IP']}-{row['Src Port']}-{row['Dst Port']}-{row['Protocol']}-{int(row['Timestamp'].timestamp())}",
+        axis=1
+    )
 
     # Confusion Matrices (only if in training mode with valid true labels)
     if is_training and len(y_true_activity) > 0 and len(y_true_stage) > 0:
@@ -36,13 +47,10 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
         plt.close()
 
     # Network Traffic Overview
-    # Note: 'Timestamp' was dropped earlier, so this will fail unless preserved elsewhere
-    # For now, we'll skip this or use a placeholder if Timestamp isn't available
     if 'Timestamp' in df.columns:
         plt.figure(figsize=(10, 6))
-        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
-        traffic = df.groupby(df['Timestamp'].dt.floor('15s')).agg({'Total_Length_of_Fwd_Packet': 'sum'}).reset_index()
-        plt.plot(traffic['Timestamp'], traffic['Total_Length_of_Fwd_Packet'], label='Fwd Traffic')
+        traffic = df.groupby(df['Timestamp'].dt.floor('15s')).agg({'Total Length of Fwd Packet': 'sum'}).reset_index()
+        plt.plot(traffic['Timestamp'], traffic['Total Length of Fwd Packet'], label='Fwd Traffic')
         plt.title("Network Traffic Overview (15s Intervals)")
         plt.xlabel("Time")
         plt.ylabel("Total Fwd Packet Length")
@@ -70,6 +78,52 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
     plt.ylabel("Latitude")
     plt.legend()
     visualizations["geolocation_map"] = plot_to_base64()
+    plt.close()
+
+    # Threat Graph
+    plt.figure(figsize=(12, 8))
+    G = nx.DiGraph()
+    for idx, row in df.iterrows():
+        src_ip = row['Src IP']
+        dst_ip = row['Dst IP']
+        flow_id = row['Flow ID']
+        is_suspicious = y_pred_activity[idx] == 'malicious' if len(y_pred_activity) > idx else False  # Example condition
+        G.add_node(src_ip, label=src_ip)
+        G.add_node(dst_ip, label=dst_ip)
+        G.add_edge(src_ip, dst_ip, flow_id=flow_id, suspicious=is_suspicious, session_id=row['Session Correlation ID'])
+    
+    pos = nx.spring_layout(G)
+    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=500)
+    nx.draw_networkx_labels(G, pos, labels=nx.get_node_attributes(G, 'label'))
+    
+    # Draw edges: red for suspicious, black for normal
+    for edge in G.edges(data=True):
+        color = 'red' if edge[2]['suspicious'] else 'black'
+        nx.draw_networkx_edges(G, pos, edgelist=[(edge[0], edge[1])], edge_color=color)
+    
+    plt.title("Threat Graph: IP Interactions")
+    visualizations["threat_graph"] = plot_to_base64()
+    plt.close()
+
+    # Host-Level Story Building
+    plt.figure(figsize=(12, 8))
+    host_events = df.groupby('Src IP').agg({
+        'Timestamp': ['min', 'max'],
+        'Flow ID': 'count',
+        'Session Correlation ID': 'nunique',
+        'Total Length of Fwd Packet': 'sum'
+    }).reset_index()
+    host_events.columns = ['Src IP', 'First Seen', 'Last Seen', 'Flow Count', 'Unique Sessions', 'Total Fwd Bytes']
+    
+    for _, row in host_events.iterrows():
+        plt.plot([row['First Seen'], row['Last Seen']], [row['Src IP'], row['Src IP']], marker='o', label=f"{row['Src IP']} ({row['Flow Count']} flows)")
+    
+    plt.title("Host-Level Activity Timeline")
+    plt.xlabel("Time")
+    plt.ylabel("Source IP")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    visualizations["host_timeline"] = plot_to_base64()
     plt.close()
 
     return visualizations
