@@ -23,7 +23,7 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
     
     # Generate Session Correlation IDs
     df['Session Correlation ID'] = df.apply(
-        lambda row: f"{row['Src IP']}-{row['Dst IP']}-{row['Src Port']}-{row['Dst Port']}-{row['Protocol']}-{int(row['Timestamp'].timestamp())}",
+        lambda row: f"{row['Src_IP']}-{row['Dst_IP']}-{row['Src_Port']}-{row['Dst_Port']}-{row['Protocol']}-{int(row['Timestamp'].timestamp())}",
         axis=1
     )
 
@@ -84,9 +84,9 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
     plt.figure(figsize=(12, 8))
     G = nx.DiGraph()
     for idx, row in df.iterrows():
-        src_ip = row['Src IP']
-        dst_ip = row['Dst IP']
-        flow_id = row['Flow ID']
+        src_ip = row['Src_IP']
+        dst_ip = row['Dst_IP']
+        flow_id = row['Flow_ID']
         is_suspicious = y_pred_activity[idx] == 'malicious' if len(y_pred_activity) > idx else False  # Example condition
         G.add_node(src_ip, label=src_ip)
         G.add_node(dst_ip, label=dst_ip)
@@ -107,16 +107,16 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
 
     # Host-Level Story Building
     plt.figure(figsize=(12, 8))
-    host_events = df.groupby('Src IP').agg({
+    host_events = df.groupby('Src_IP').agg({
         'Timestamp': ['min', 'max'],
-        'Flow ID': 'count',
+        'Flow_ID': 'count',
         'Session Correlation ID': 'nunique',
         'Total Length of Fwd Packet': 'sum'
     }).reset_index()
-    host_events.columns = ['Src IP', 'First Seen', 'Last Seen', 'Flow Count', 'Unique Sessions', 'Total Fwd Bytes']
+    host_events.columns = ['Src_IP', 'First_Seen', 'Last_Seen', 'Flow_Count', 'Unique_Sessions', 'Total_Fwd_Bytes']
     
     for _, row in host_events.iterrows():
-        plt.plot([row['First Seen'], row['Last Seen']], [row['Src IP'], row['Src IP']], marker='o', label=f"{row['Src IP']} ({row['Flow Count']} flows)")
+        plt.plot([row['First_Seen'], row['Last_Seen']], [row['Src_IP'], row['Src_IP']], marker='o', label=f"{row['Src_IP']} ({row['Flow_Count']} flows)")
     
     plt.title("Host-Level Activity Timeline")
     plt.xlabel("Time")
