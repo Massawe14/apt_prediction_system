@@ -111,7 +111,7 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
         'Timestamp': ['min', 'max'],
         'Flow_ID': 'count',
         'Session Correlation ID': 'nunique',
-        'Total Length of Fwd Packet': 'sum'
+        'Total_Length_of_Fwd_Packet': 'sum'
     }).reset_index()
     host_events.columns = ['Src_IP', 'First_Seen', 'Last_Seen', 'Flow_Count', 'Unique_Sessions', 'Total_Fwd_Bytes']
     
