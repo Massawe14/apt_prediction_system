@@ -123,9 +123,6 @@ async def predict_from_data(df, is_training=False):
         raise ValueError(f"Missing required columns: {missing_columns}")
     
     # Convert string columns to numeric
-    # Preserve original IPs for alerts
-    df['Src_IP_original'] = df['Src_IP']
-    df['Dst_IP_original'] = df['Dst_IP']
     df['Src_IP'] = df['Src_IP'].apply(ip_to_int)
     df['Dst_IP'] = df['Dst_IP'].apply(ip_to_int)
     df['Protocol'] = df['Protocol'].map(lambda x: protocol_map.get(x, 0))  # Default to 0 for unknown
@@ -193,7 +190,7 @@ async def predict_from_data(df, is_training=False):
     for i, (flow, activity, stage) in enumerate(zip(df.to_dict('records')[-len(y_pred_activity):], y_pred_activity, y_pred_stage)):
         if activity != 0 or stage != 0:
             alert = threat_analyzer.generate_alert(
-                {'Src_IP': flow['Src_IP_original'], 'Dst_IP': flow['Dst_IP_original'], **{k: v for k, v in flow.items() if k not in ['Src_IP_original', 'Dst_IP_original']}},
+                {'Src_IP': flow['Src_IP'], 'Dst_IP': flow['Dst_IP'], **{k: v for k, v in flow.items() if k not in ['Src_IP_original', 'Dst_IP_original']}},
                 activity, stage
             )
             alert['mitre'] = mitre_mapper.map_to_mitre(activity, stage)
