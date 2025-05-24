@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import uvicorn
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -55,7 +56,7 @@ except Exception as e:
     logger.error(f"Error loading scaler: {e}")
     raise e
 
-capturer = NetworkCapture(interface='Wi-Fi', capture_duration=15)
+capturer = NetworkCapture(interface='any', capture_duration=15)
 threat_analyzer = ThreatAnalyzer()
 geo_locator = GeoLocator()
 mitre_mapper = MitreMapper()
@@ -84,16 +85,35 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="APT Real-Time Prediction Dashboard API", lifespan=lifespan)
 
+origins = ["*"]  # Or restrict to specific domains for security
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 async def predict_from_data(df, is_training=False):
     start_time = time.time()
     logger.info(f"Processing {len(df)} records for prediction")
     
     # Initial preprocessing to match training data
     df = df.copy()
-    df.columns = df.columns.str.replace(' ', '_')  # Match preprocess_data's column naming
+    # Log original column names
+    logger.info(f"Original DataFrame columns: {df.columns.tolist()}")
     
-    # Drop unwanted columns
-    df = df.drop(columns=['Flow_ID', 'Timestamp'], errors='ignore')
+    # Normalize column names (replace spaces and slashes with underscores)
+    df.columns = df.columns.str.replace(' ', '_').str.replace('/', '_')
+    logger.info(f"Normalized DataFrame columns: {df.columns.tolist()}")
+    
+    # Verify required columns exist
+    required_columns = ['Src_IP', 'Dst_IP', 'Src_Port', 'Dst_Port', 'Protocol']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        logger.error(f"Missing required columns: {missing_columns}")
+        raise ValueError(f"Missing required columns: {missing_columns}")
     
     # Convert string columns to numeric
     df['Src_IP'] = df['Src_IP'].apply(ip_to_int)
@@ -104,8 +124,16 @@ async def predict_from_data(df, is_training=False):
     df['Src_Port'] = pd.to_numeric(df['Src_Port'], errors='coerce').fillna(0).astype(int)
     df['Dst_Port'] = pd.to_numeric(df['Dst_Port'], errors='coerce').fillna(0).astype(int)
     
+    # Add dummy Activity and Stage columns for inference mode
+    if not is_training:
+        df['Activity'] = 0  # Placeholder for inference
+        df['Stage'] = 0     # Placeholder for inference
+    
     # Apply preprocessing and scaling
+    logger.info("Applying preprocessing and scaling")
     df_processed = preprocess_data(df, scaler, is_training=is_training)
+    logger.info(f"Processed DataFrame shape: {df_processed.shape}")
+    
     X, y_activity, y_stage = create_sequences(df_processed, seq_length=5, is_training=is_training)
 
     if len(X) == 0:
@@ -207,7 +235,8 @@ async def capture_and_predict_loop():
             else:
                 logger.warning("Insufficient data captured (need at least 5 records)")
         except Exception as e:
-            logger.error(f"Error in capture loop: {e}")
+            logger.error(f"Error in capture loop: {e}", exc_info=True)  # Include stack trace
+            await asyncio.sleep(5)  # Short delay to prevent tight loop
         await asyncio.sleep(15)
 
 @app.get("/dashboard")
@@ -229,5 +258,5 @@ async def predict_apt_manual(network_data: NetworkData):
     return result
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8001)
     
