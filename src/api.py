@@ -57,7 +57,6 @@ except Exception as e:
     raise e
 
 capturer = NetworkCapture(interface='any', capture_duration=15)
-capturer = NetworkCapture(interface='any', capture_duration=15)
 threat_analyzer = ThreatAnalyzer()
 geo_locator = GeoLocator()
 mitre_mapper = MitreMapper()
@@ -70,6 +69,13 @@ def ip_to_int(ip):
         return int(octets[0]) * 256**3 + int(octets[1]) * 256**2 + int(octets[2]) * 256 + int(octets[3])
     except Exception:
         return 0  # Default value for invalid IPs
+    
+# Function to convert integer back to IP address
+def int_to_ip(ip_int):
+    try:
+        return '.'.join(str((ip_int >> (8 * i)) & 0xFF) for i in range(3, -1, -1))
+    except Exception:
+        return ''
 
 # Protocol mapping
 protocol_map = {'TCP': 6, 'UDP': 17, 'ICMP': 1}  # Add more as needed
@@ -117,6 +123,9 @@ async def predict_from_data(df, is_training=False):
         raise ValueError(f"Missing required columns: {missing_columns}")
     
     # Convert string columns to numeric
+    # Preserve original IPs for alerts
+    df['Src_IP_original'] = df['Src_IP']
+    df['Dst_IP_original'] = df['Dst_IP']
     df['Src_IP'] = df['Src_IP'].apply(ip_to_int)
     df['Dst_IP'] = df['Dst_IP'].apply(ip_to_int)
     df['Protocol'] = df['Protocol'].map(lambda x: protocol_map.get(x, 0))  # Default to 0 for unknown
@@ -175,11 +184,18 @@ async def predict_from_data(df, is_training=False):
     true_activity_decoded = [activity_decode.get(act, 'Unknown') for act in y_true_activity] if y_true_activity is not None else None
     true_stage_decoded = [stage_decode.get(stg, 'Unknown') for stg in y_true_stage] if y_true_stage is not None else None
 
+    # Convert integer IPs back to string for alerts and outputs
+    df['Src_IP'] = df['Src_IP'].apply(int_to_ip)
+    df['Dst_IP'] = df['Dst_IP'].apply(int_to_ip)
+
     alerts = []
-    apt_stages = threat_analyzer.get_apt_stages({"activity": y_pred_activity, "stage": y_pred_stage})
+    # apt_stages = threat_analyzer.get_apt_stages({"activity": y_pred_activity, "stage": y_pred_stage})
     for i, (flow, activity, stage) in enumerate(zip(df.to_dict('records')[-len(y_pred_activity):], y_pred_activity, y_pred_stage)):
         if activity != 0 or stage != 0:
-            alert = threat_analyzer.generate_alert(flow, activity, stage)
+            alert = threat_analyzer.generate_alert(
+                {'Src_IP': flow['Src_IP_original'], 'Dst_IP': flow['Dst_IP_original'], **{k: v for k, v in flow.items() if k not in ['Src_IP_original', 'Dst_IP_original']}},
+                activity, stage
+            )
             alert['mitre'] = mitre_mapper.map_to_mitre(activity, stage)
             alert['remediation'] = remediator.suggest(alert)
             alerts.append(alert)
@@ -201,23 +217,44 @@ async def predict_from_data(df, is_training=False):
 
     prediction_time = time.time() - start_time
 
+    # Return only the latest prediction (last in the sequence)
+    latest_pred_activity = pred_activity_decoded[-1] if pred_activity_decoded else None
+    latest_pred_stage = pred_stage_decoded[-1] if pred_stage_decoded else None
+    latest_alert = alerts[-1] if alerts else None
+
+    # Calculate accuracy if in training mode and true labels are available
+    accuracy = None
+    if is_training and y_true_activity is not None and y_true_stage is not None and len(y_true_activity) > 0:
+        activity_acc = np.mean(np.array(y_true_activity) == np.array(y_pred_activity))
+        stage_acc = np.mean(np.array(y_true_stage) == np.array(y_pred_stage))
+        accuracy = {"activity_accuracy": activity_acc, "stage_accuracy": stage_acc}
+
     result = {
         "key_metrics": {
-            "threat_severity": {alert['severity'] for alert in alerts} if alerts else {'Low'},
-            "apt_stages": apt_stages
+            "threat_severity": latest_alert['severity'] if latest_alert else 'Low',
+            "apt_stage": latest_alert['stage'] if latest_alert else latest_pred_stage
         },
-        "predictions": {"activity": pred_activity_decoded, "stage": pred_stage_decoded},
-        "alerts": alerts,
+        "prediction": {
+            "activity": latest_pred_activity,
+            "stage": latest_pred_stage
+        },
+        "alert": latest_alert,
         "trend_analysis": threat_analyzer.trend_analysis(),
         "actionable_insights": {
             "top_threats": threat_analyzer.top_threats(),
-            "mitre_mapping": {alert['src_ip']: alert['mitre'] for alert in alerts}
+            "mitre_mapping": latest_alert['mitre'] if latest_alert and 'mitre' in latest_alert else None
         },
         "visualizations": visualizations,
-        "model_performance": {"prediction_time": prediction_time}
+        "model_performance": {
+            "prediction_time": prediction_time,
+            "accuracy": accuracy
+        }
     }
     if is_training and y_true_activity is not None and y_true_stage is not None:
-        result["true_values"] = {"activity": true_activity_decoded, "stage": true_stage_decoded}
+        result["true_values"] = {
+            "activity": true_activity_decoded[-1] if true_activity_decoded else None,
+            "stage": true_stage_decoded[-1] if true_stage_decoded else None
+        }
         result["model_performance"]["classification_reports"] = reports
 
     return result
