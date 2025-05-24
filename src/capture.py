@@ -7,7 +7,7 @@ import numpy as np
 from scapy.all import get_working_ifaces, sniff
 
 FLOW_FEATURES = [
-    'Source Type', 'Flow ID', 'Src IP', 'Src Port', 'Dst IP', 'Dst Port', 'Protocol', 'Timestamp',
+    'Flow ID', 'Src IP', 'Src Port', 'Dst IP', 'Dst Port', 'Protocol', 'Timestamp',
     'Flow Duration', 'Total Fwd Packet', 'Total Bwd packets', 'Total Length of Fwd Packet',
     'Total Length of Bwd Packet', 'Fwd Packet Length Max', 'Fwd Packet Length Min',
     'Fwd Packet Length Mean', 'Fwd Packet Length Std', 'Bwd Packet Length Max',
@@ -29,7 +29,7 @@ FLOW_FEATURES = [
 ]
 
 class NetworkCapture:
-    def __init__(self, capture_duration=15, source_type='PCAP'):
+    def __init__(self, interface=None, capture_duration=15, source_type='PCAP'):
         self.capture_duration = capture_duration
         self.source_type = source_type
         self.flows = defaultdict(lambda: {
@@ -37,7 +37,7 @@ class NetworkCapture:
             'fwd_packets': 0, 'bwd_packets': 0, 'fwd_bytes': 0, 'bwd_bytes': 0
         })
         self.tshark_path = r"/usr/bin/tshark"
-        self.interface = self._select_active_interface()
+        self.interface = interface if interface else self._select_active_interface()
 
     def _select_active_interface(self):
         """Select the first network interface with data."""
@@ -135,7 +135,6 @@ class NetworkCapture:
             bwd_lens = [p['length'] for p in flow['packets'] if not p['is_fwd']]
 
             flow_data = {
-                'Source Type': self.source_type,
                 'Flow ID': flow_id,
                 'Src IP': flow_id.split('-')[0],
                 'Src Port': int(flow_id.split('-')[2]),

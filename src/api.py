@@ -23,6 +23,7 @@ from src.threat_analysis import ThreatAnalyzer
 from src.geolocation import GeoLocator
 from src.mitre_mapping import MitreMapper
 from src.remediation import RemediationSuggester
+from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,13 +85,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="APT Real-Time Prediction Dashboard API", lifespan=lifespan)
 
+origins = ["*"] # Or restrict to specific domains for security
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 async def predict_from_data(df, is_training=False):
     start_time = time.time()
     logger.info(f"Processing {len(df)} records for prediction")
     
     # Initial preprocessing to match training data
     df = df.copy()
-    df.columns = df.columns.str.replace(' ', '_')  # Match preprocess_data's column naming
+    df.columns = df.columns.str.replace(' ', '_').str.replace('/', '_')  # Match preprocess_data's column naming
     
     # Drop unwanted columns
     df = df.drop(columns=['Flow_ID', 'Timestamp'], errors='ignore')
@@ -229,5 +240,5 @@ async def predict_apt_manual(network_data: NetworkData):
     return result
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="167.99.37.95", port=8000)
     
