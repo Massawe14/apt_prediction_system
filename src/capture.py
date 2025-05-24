@@ -67,7 +67,6 @@ class NetworkCapture:
     async def capture_traffic(self):
         if not self.interface:
             raise ValueError("No valid interface selected for capture.")
-        
         print(f"Starting capture on interface: {self.interface} with source type: {self.source_type}")
 
         def capture_sync():
@@ -239,4 +238,3 @@ def test_capture_sync():
 
 if __name__ == "__main__":
     test_capture_sync()
-    

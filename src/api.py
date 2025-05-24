@@ -57,6 +57,7 @@ except Exception as e:
     raise e
 
 capturer = NetworkCapture(interface='any', capture_duration=15)
+capturer = NetworkCapture(interface='any', capture_duration=15)
 threat_analyzer = ThreatAnalyzer()
 geo_locator = GeoLocator()
 mitre_mapper = MitreMapper()
