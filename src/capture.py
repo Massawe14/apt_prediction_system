@@ -1,10 +1,14 @@
 import pyshark
+import logging
 import pandas as pd
 import asyncio
 from datetime import datetime
 from collections import defaultdict
 import numpy as np
 from scapy.all import get_working_ifaces, sniff
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 FLOW_FEATURES = [
     'Flow ID', 'Src IP', 'Src Port', 'Dst IP', 'Dst Port', 'Protocol', 'Timestamp',
@@ -100,6 +104,7 @@ class NetworkCapture:
             if not flow['packets']:
                 flow['start_time'] = timestamp
             flow['end_time'] = timestamp
+            logger.debug(f"Processing packet for flow {flow_id}: start_time={flow['start_time']}, end_time={flow['end_time']}")
             flow['packets'].append({
                 'timestamp': timestamp, 'length': pkt_len,
                 'is_fwd': src_ip < dst_ip,  # Simple heuristic for direction
@@ -113,6 +118,7 @@ class NetworkCapture:
                 flow['bwd_bytes'] += pkt_len
 
         except AttributeError:
+            logger.debug(f"Skipping packet due to AttributeError: {packet}")
             pass
 
     def _finalize_flows(self):
