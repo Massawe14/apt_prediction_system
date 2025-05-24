@@ -197,7 +197,7 @@ async def predict_from_data(df, is_training=False):
     # Pass is_training to generate_visualizations to handle inference mode
     y_true_activity_safe = y_true_activity if y_true_activity is not None else []
     y_true_stage_safe = y_true_stage if y_true_stage is not None else []
-    visualizations = generate_visualizations(df_processed, y_true_activity_safe, y_pred_activity, y_true_stage_safe, y_pred_stage, X, threat_analyzer.trend_analysis(), geo_data, is_training=is_training)
+    visualizations = generate_visualizations(df, y_true_activity_safe, y_pred_activity, y_true_stage_safe, y_pred_stage, X, threat_analyzer.trend_analysis(), geo_data, is_training=is_training)
 
     prediction_time = time.time() - start_time
 

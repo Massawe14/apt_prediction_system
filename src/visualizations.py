@@ -49,8 +49,8 @@ def generate_visualizations(df, y_true_activity, y_pred_activity, y_true_stage, 
     # Network Traffic Overview
     if 'Timestamp' in df.columns:
         plt.figure(figsize=(10, 6))
-        traffic = df.groupby(df['Timestamp'].dt.floor('15s')).agg({'Total Length of Fwd Packet': 'sum'}).reset_index()
-        plt.plot(traffic['Timestamp'], traffic['Total Length of Fwd Packet'], label='Fwd Traffic')
+        traffic = df.groupby(df['Timestamp'].dt.floor('15s')).agg({'Total_Length_of_Fwd_Packet': 'sum'}).reset_index()
+        plt.plot(traffic['Timestamp'], traffic['Total_Length_of_Fwd_Packet'], label='Fwd Traffic')
         plt.title("Network Traffic Overview (15s Intervals)")
         plt.xlabel("Time")
         plt.ylabel("Total Fwd Packet Length")
