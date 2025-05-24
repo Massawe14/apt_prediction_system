@@ -8,7 +8,6 @@ import pandas as pd
 import numpy as np
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
