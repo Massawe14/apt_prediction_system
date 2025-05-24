@@ -260,4 +260,4 @@ async def predict_apt_manual(network_data: NetworkData):
     return result
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    uvicorn.run(app, host="167.99.37.95", port=8000)
